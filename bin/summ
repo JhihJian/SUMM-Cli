@@ -3,8 +3,16 @@
 
 set -e
 
+# Resolve SELF_DIR following symlinks
+_source="${BASH_SOURCE[0]}"
+while [[ -L "$_source" ]]; do
+    _dir="$(cd -P "$(dirname "$_source")" && pwd)"
+    _source="$(readlink "$_source")"
+    [[ "$_source" != /* ]] && _source="$_dir/$_source"
+done
+SELF_DIR="$(cd -P "$(dirname "$_source")" && pwd)"
+
 # Source libraries
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SELF_DIR}/../lib/core.sh"
 source "${SELF_DIR}/../lib/output.sh"
 

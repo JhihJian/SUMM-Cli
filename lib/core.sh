@@ -1,6 +1,8 @@
 #!/bin/bash
 # lib/core.sh — SUMM-Cli core functions
 
+[[ -n "$_SUMM_CORE_LOADED" ]] && return 0
+
 # Resolve SUMM_HOME: directory where bin/summ lives (handles symlinks)
 _resolve_summ_home() {
     local source="${BASH_SOURCE[0]}"
@@ -22,20 +24,24 @@ summ_error() {
 _summ_load_config() {
     SUMM_ENV_FILE="${HOME}/.summ/.env"
     if [[ -f "$SUMM_ENV_FILE" ]]; then
-        set -a
         # shellcheck disable=SC1090
         while IFS='=' read -r key value; do
             [[ -z "$key" || "$key" == \#* ]] && continue
+            [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+            # Strip surrounding quotes from value
+            value="${value#\"}" ; value="${value%\"}"
+            value="${value#\'}" ; value="${value%\'}"
             # Only set if not already in environment
             if [[ -z "${!key}" ]]; then
                 export "$key=$value"
             fi
         done < "$SUMM_ENV_FILE"
-        set +a
     fi
     SUMM_CONFIG_LOADED=true
 }
 
+# NOTE: Assumes _summ_load_config has been called, which exports .env values.
+# The file grep fallback exists for edge cases where config is read before load.
 # Get config value: env var > .env file > default
 summ_config_get() {
     local key="$1"
@@ -59,11 +65,15 @@ summ_config_set() {
 
     [[ -z "$key" ]] && summ_error "config set 需要 key 参数"
     [[ -z "$value" ]] && summ_error "config set 需要 value 参数"
+    [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && summ_error "无效的配置键名: $key"
 
     mkdir -p "$(dirname "$env_file")"
 
     if grep -q "^${key}=" "$env_file" 2>/dev/null; then
-        sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+        # Escape sed special chars in value
+        local escaped_value
+        escaped_value=$(printf '%s\n' "$value" | sed 's/[&/\]/\\&/g')
+        sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$env_file"
     else
         echo "${key}=${value}" >> "$env_file"
     fi
@@ -81,4 +91,5 @@ _summ_discover_plugins() {
 }
 
 # Initialize core
+_SUMM_CORE_LOADED=true
 _resolve_summ_home

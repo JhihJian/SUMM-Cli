@@ -11,13 +11,13 @@ summ_output() {
     fi
 
     if [[ "$SUMM_OUTPUT_JSON" == "true" ]]; then
-        echo "$json_data" | jq .
+        printf '%s\n' "$json_data" | jq .
     elif command -v toon &>/dev/null; then
-        echo "$json_data" | toon
+        printf '%s\n' "$json_data" | toon
     elif command -v npx &>/dev/null; then
-        echo "$json_data" | npx @toon-format/cli 2>/dev/null
+        printf '%s\n' "$json_data" | npx @toon-format/cli 2>/dev/null
     else
-        echo "$json_data" | jq .
+        printf '%s\n' "$json_data" | jq .
         echo "[提示] 安装 toon 以获得更好的输出: npm install -g @toon-format/cli" >&2
     fi
 }

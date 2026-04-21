@@ -39,6 +39,6 @@ summ_parse_output_flag() {
                 SUMM_CLEAN_ARGS+=("${args[$i]}")
                 ;;
         esac
-        ((i++))
+        ((i++)) || true
     done
 }

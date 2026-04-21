@@ -1,0 +1,169 @@
+#!/bin/bash
+# bin/summ — SUMM-Cli entry point
+
+set -e
+
+# Source libraries
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SELF_DIR}/../lib/core.sh"
+source "${SELF_DIR}/../lib/output.sh"
+
+# Load config
+_summ_load_config
+
+# Parse global flags (--json)
+summ_parse_output_flag "$@"
+set -- "${SUMM_CLEAN_ARGS[@]}"
+
+# Built-in commands
+_cmd_help() {
+    if [[ -n "$1" ]]; then
+        _cmd_help_plugin "$1"
+        return
+    fi
+
+    echo "SUMM-Cli — 统一 API 工具集"
+    echo ""
+    echo "用法: summ <插件> [子命令] [选项] [参数]"
+    echo "      summ <内置命令> [参数]"
+    echo ""
+    echo "内置命令:"
+    echo "  help [插件]      显示帮助信息"
+    echo "  list             列出已安装插件"
+    echo "  init             初始化配置"
+    echo "  config get KEY   查看配置"
+    echo "  config set K V   设置配置"
+    echo ""
+    echo "全局选项:"
+    echo "  --json           输出 JSON 格式"
+    echo ""
+    echo "可用插件:"
+
+    for plugin_dir in $(_summ_discover_plugins); do
+        local name
+        name="$(basename "$plugin_dir")"
+        source "${plugin_dir}plugin.sh"
+        local info
+        info="$(plugin_info)"
+        local desc
+        desc="$(echo "$info" | cut -d: -f2)"
+        printf "  %-15s %s\n" "$name" "$desc"
+    done
+}
+
+_cmd_help_plugin() {
+    local plugin_name="$1"
+    local plugin_file="${SUMM_HOME}/plugins/${plugin_name}/plugin.sh"
+
+    [[ ! -f "$plugin_file" ]] && summ_error "未知插件: $plugin_name"
+
+    source "$plugin_file"
+    local info
+    info="$(plugin_info)"
+    local desc
+    desc="$(echo "$info" | cut -d: -f2)"
+    local subcmds
+    subcmds="$(echo "$info" | cut -d: -f3 | tr '|' ', ')"
+
+    echo "summ ${plugin_name} — ${desc}"
+    echo ""
+    echo "子命令: ${subcmds}"
+    echo ""
+
+    if declare -f plugin_help &>/dev/null; then
+        plugin_help
+    fi
+}
+
+_cmd_list() {
+    for plugin_dir in $(_summ_discover_plugins); do
+        local name
+        name="$(basename "$plugin_dir")"
+        source "${plugin_dir}plugin.sh"
+        local info
+        info="$(plugin_info)"
+        local desc
+        desc="$(echo "$info" | cut -d: -f2)"
+        printf "%-15s %s\n" "$name" "$desc"
+    done
+}
+
+_cmd_init() {
+    local summ_dir="${HOME}/.summ"
+    mkdir -p "$summ_dir"
+
+    if [[ ! -f "${summ_dir}/.env" ]]; then
+        if [[ -f "${SUMM_HOME}/.env.example" ]]; then
+            cp "${SUMM_HOME}/.env.example" "${summ_dir}/.env"
+            echo "已创建配置文件: ${summ_dir}/.env"
+        else
+            touch "${summ_dir}/.env"
+            echo "已创建空配置文件: ${summ_dir}/.env（无模板可用）"
+        fi
+    else
+        echo "配置文件已存在: ${summ_dir}/.env"
+    fi
+}
+
+_cmd_config() {
+    local action="$1"
+    shift 2>/dev/null || true
+
+    case "$action" in
+        get)
+            [[ -z "$1" ]] && summ_error "用法: summ config get <KEY>"
+            local val
+            val="$(summ_config_get "$1")"
+            if [[ -n "$val" ]]; then
+                echo "$val"
+            else
+                echo "(未设置)"
+            fi
+            ;;
+        set)
+            [[ -z "$1" || -z "$2" ]] && summ_error "用法: summ config set <KEY> <VALUE>"
+            summ_config_set "$1" "$2"
+            echo "已设置 $1"
+            ;;
+        *)
+            summ_error "未知 config 操作: ${action:-空}。使用 get 或 set"
+            ;;
+    esac
+}
+
+# Route command
+COMMAND="${1:-help}"
+shift 2>/dev/null || true
+
+case "$COMMAND" in
+    help|init|list|config)
+        "_cmd_${COMMAND}" "$@"
+        ;;
+    *)
+        # Try plugin
+        PLUGIN_FILE="${SUMM_HOME}/plugins/${COMMAND}/plugin.sh"
+        [[ ! -f "$PLUGIN_FILE" ]] && summ_error "未知命令: ${COMMAND}，运行 summ list 查看可用命令"
+
+        source "$PLUGIN_FILE"
+
+        SUBCOMMAND="${1:-}"
+        if [[ -n "$SUBCOMMAND" ]]; then
+            shift
+        fi
+
+        if [[ -n "$SUBCOMMAND" ]] && declare -f "cmd_${SUBCOMMAND}" &>/dev/null; then
+            result="$( "cmd_${SUBCOMMAND}" "$@" )" || exit $?
+            summ_output "$result"
+        elif declare -f cmd_default &>/dev/null; then
+            result="$( cmd_default "$SUBCOMMAND" "$@" )" || exit $?
+            summ_output "$result"
+        else
+            if [[ -n "$SUBCOMMAND" ]]; then
+                summ_error "未知子命令: ${SUBCOMMAND}"
+            else
+                # No subcommand, no default — show help
+                _cmd_help_plugin "$COMMAND"
+            fi
+        fi
+        ;;
+esac

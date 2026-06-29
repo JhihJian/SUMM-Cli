@@ -83,7 +83,9 @@ assert_contains "$TMP_DIR/curl.args" "Title: SUMM Test"
 assert_contains "$TMP_DIR/curl.args" "Priority: urgent"
 assert_contains "$TMP_DIR/curl.args" "Tags: warning,robot"
 assert_contains "$TMP_DIR/curl.args" "https://ntfy.example.test/ops-alerts"
-grep -Fxq "磁盘空间不足" "$TMP_DIR/curl.body" || fail "message body should be sent via stdin"
+assert_contains "$TMP_DIR/curl.body" "当前设备IP: "
+assert_contains "$TMP_DIR/curl.body" "运行CLI命令目录名称: SUMM-Cli"
+assert_contains "$TMP_DIR/curl.body" "磁盘空间不足"
 jq -e '.ok == true and .topic == "ops-alerts"' "$TMP_DIR/send.out" >/dev/null
 
 cat > "$HOME/.summ/.env" <<'ENV'

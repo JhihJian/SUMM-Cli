@@ -26,6 +26,8 @@ summ config set KEY VALUE  # 设置配置
 summ config get KEY        # 查看配置
 ```
 
+`summ notify` 发送正文时，会在用户消息前自动补充两行上下文：当前设备 IP、运行 CLI 命令的目录名称。
+
 ## 添加新插件
 
 当前 npm 单文件本体的命令注册在 `summ.mjs` 内。新增跨平台命令时，应优先使用 Node.js 标准库实现，避免依赖 Bash、curl、jq、sed 等 Unix 工具。

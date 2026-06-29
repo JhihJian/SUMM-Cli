@@ -147,7 +147,7 @@ describe('summ commands', () => {
       const output = JSON.parse(result.stdout);
       assert.equal(output.ok, true);
       assert.equal(output.topic, 'ops-alerts');
-      assert.equal(output.message, '磁盘空间不足');
+      assert.match(output.message, /^当前设备IP: .+\n运行CLI命令目录名称: SUMM-Cli\n\n磁盘空间不足$/);
 
       const request = await server.readRequest();
       assert.equal(request.method, 'POST');
@@ -156,7 +156,7 @@ describe('summ commands', () => {
       assert.equal(request.headers.title, 'SUMM Test');
       assert.equal(request.headers.priority, 'urgent');
       assert.equal(request.headers.tags, 'warning,robot');
-      assert.equal(request.body, '磁盘空间不足');
+      assert.match(request.body, /^当前设备IP: .+\n运行CLI命令目录名称: SUMM-Cli\n\n磁盘空间不足$/);
     } finally {
       await server.stop();
     }
@@ -189,7 +189,7 @@ describe('summ commands', () => {
 
       const request = await server.readRequest();
       assert.equal(request.headers.authorization, 'Bearer tk_from_docker');
-      assert.equal(request.body, 'docker fallback');
+      assert.match(request.body, /^当前设备IP: .+\n运行CLI命令目录名称: SUMM-Cli\n\ndocker fallback$/);
     } finally {
       await server.stop();
     }

@@ -387,10 +387,11 @@ async function notifyRequest(ctx, message) {
     headers.Tags = tags;
   }
 
+  const notificationMessage = buildNotifyMessage(message);
   const response = await requestJson(publishUrl, {
     method: 'POST',
     headers,
-    body: message,
+    body: notificationMessage,
     timeoutSeconds: Number(timeout)
   });
 
@@ -401,9 +402,59 @@ async function notifyRequest(ctx, message) {
     title,
     priority,
     tags,
-    message,
+    message: notificationMessage,
     response
   };
+}
+
+function buildNotifyMessage(message) {
+  return [
+    `当前设备IP: ${currentDeviceIp()}`,
+    `运行CLI命令目录名称: ${currentRunDirectoryName()}`,
+    '',
+    message
+  ].join('\n');
+}
+
+function currentDeviceIp() {
+  const candidates = [];
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    for (const address of addresses || []) {
+      const family = address.family;
+      if ((family === 'IPv4' || family === 4) && !address.internal) {
+        candidates.push({ name, address: address.address });
+      }
+    }
+  }
+
+  const physicalPrivate = candidates.find((candidate) =>
+    isPrivateIpv4(candidate.address) && !isVirtualNetworkInterface(candidate.name)
+  );
+  if (physicalPrivate) {
+    return physicalPrivate.address;
+  }
+
+  const physical = candidates.find((candidate) => !isVirtualNetworkInterface(candidate.name));
+  return (physical || candidates[0])?.address || 'unknown';
+}
+
+function currentRunDirectoryName() {
+  try {
+    const cwd = process.cwd();
+    return path.basename(cwd) || path.parse(cwd).root || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function isPrivateIpv4(address) {
+  return /^10\./.test(address) ||
+    /^192\.168\./.test(address) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(address);
+}
+
+function isVirtualNetworkInterface(name) {
+  return /^(br-|docker|lo|veth|virbr|vmnet)/.test(name);
 }
 
 function isByteString(value) {

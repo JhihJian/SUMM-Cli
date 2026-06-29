@@ -39,6 +39,8 @@ _notify_docker_token() {
 
 _notify_request() {
     local message="${1:-[OpsAgent] 测试告警}"
+    local notification_message
+    notification_message="$(_notify_build_message "$message")"
 
     local ntfy_url
     ntfy_url="$(summ_config_get NTFY_URL 'http://127.0.0.1:8200')"
@@ -79,7 +81,7 @@ _notify_request() {
 
     local publish_url="${ntfy_url%/}/${topic#/}"
     local response
-    response="$(printf '%s' "$message" | curl -fsS \
+    response="$(printf '%s' "$notification_message" | curl -fsS \
         --max-time "$timeout" \
         --config "$curl_config" \
         "${curl_headers[@]}" \
@@ -92,7 +94,7 @@ _notify_request() {
         --arg title "$title" \
         --arg priority "$priority" \
         --arg tags "$tags" \
-        --arg message "$message" \
+        --arg message "$notification_message" \
         --arg response "$response" \
         '{
             ok: true,
@@ -104,6 +106,40 @@ _notify_request() {
             message: $message,
             response: (if $response == "" then null else (try ($response | fromjson) catch $response) end)
         }'
+}
+
+_notify_build_message() {
+    local message="$1"
+    printf '当前设备IP: %s\n运行CLI命令目录名称: %s\n\n%s' "$(_notify_current_device_ip)" "$(_notify_run_directory_name)" "$message"
+}
+
+_notify_current_device_ip() {
+    local ip
+
+    if command -v ip &>/dev/null; then
+        ip="$(ip -o -4 addr show scope global 2>/dev/null |
+            awk '!/ (br-|docker|lo|veth|virbr|vmnet)/ && $4 ~ /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/ {sub(/\/.*/, "", $4); print $4; exit}')"
+        [[ -n "$ip" ]] && printf '%s' "$ip" && return
+
+        ip="$(ip -o -4 addr show scope global 2>/dev/null |
+            awk '!/ (br-|docker|lo|veth|virbr|vmnet)/ {sub(/\/.*/, "", $4); print $4; exit}')"
+        [[ -n "$ip" ]] && printf '%s' "$ip" && return
+
+        ip="$(ip -o -4 addr show scope global 2>/dev/null |
+            awk '{sub(/\/.*/, "", $4); print $4; exit}')"
+        [[ -n "$ip" ]] && printf '%s' "$ip" && return
+    fi
+
+    if command -v hostname &>/dev/null; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+        [[ -n "$ip" ]] && printf '%s' "$ip" && return
+    fi
+
+    printf 'unknown'
+}
+
+_notify_run_directory_name() {
+    basename "$PWD"
 }
 
 cmd_send() {
